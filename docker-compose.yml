@@ -1,0 +1,59 @@
+version: "3"
+
+services:
+  php:
+    image: php-container/php:${PHP_VERSION}
+    volumes:
+      - ~/.composer-docker/cache:/var/www/.composer/cache
+      - ./:/app
+      - ./docker/php/docker-php-entrypoint:/usr/local/bin/docker-php-entrypoint
+      - ./docker/php/.bashrc:/var/www/.bashrc
+    environment:
+      PHP_USER_ID: ${PHP_USER_ID}
+      COMPOSER_MEMORY_LIMIT: -1
+    restart: ${RESTART}
+    depends_on:
+      - db
+
+  nginx:
+    image: nginx:1.21.3-alpine
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./:/app:delegated
+    restart: ${RESTART}
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:${DOCKER_DOMAIN},${API_DOMAIN}"
+    networks:
+      - default
+      - web
+    depends_on:
+      - php
+
+  db:
+    image: mysql:8.0.25
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: 1
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./docker/db/initdb.d:/docker-entrypoint-initdb.d
+      - db_data:/var/lib/mysql
+    ports:
+      - 127.0.0.1:${DOCKER_DB_PORT}:3306
+
+  node:
+    image: node:14.16.0-alpine
+    user: "node"
+    working_dir: /app
+    volumes:
+      - ./:/app:delegated
+    command: /bin/true
+
+volumes:
+  db_data:
+
+networks:
+  web:
+    external: true
